@@ -14,8 +14,7 @@ from jaxpm.lensing import density_plane
 import haiku as hk
 
 from jaxpm.painting import cic_paint, cic_read
-from jaxpm.pm import lpt
-from jaxpm.kernels import fftk, gradient_kernel, laplace_kernel, longrange_kernel
+from jaxpm.kernels import gradient_kernel, laplace_kernel, longrange_kernel
 from jaxpm.nn import NeuralSplineFourierFilter
 
 __all__ = [
