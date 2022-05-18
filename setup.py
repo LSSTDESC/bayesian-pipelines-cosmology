@@ -15,7 +15,7 @@ setup(
     url='https://github.com/LSSTDESC/bayesian-pipelines-cosmology',
     license='MIT',
     packages=find_packages(),
-    install_requires=['numpyro', 'jax', 'lenstools', 'dm-haiku', 'jaxpm==0.0.1'],
+    install_requires=['numpyro', 'jax', 'lenstools', 'dm-haiku', 'jaxpm', 'jax-cosmo'],
     dependency_links=[
         'https://github.com/DifferentiableUniverseInitiative/JaxPM/tarball/master#egg=jaxpm-0.0.1'
     ],
