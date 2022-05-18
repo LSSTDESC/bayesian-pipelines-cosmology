@@ -11,10 +11,18 @@ from jax.experimental.ode import odeint
 from jaxpm.pm import lpt, make_ode_fn
 from jaxpm.kernels import fftk
 from jaxpm.lensing import density_plane
+import haiku as hk
+
+from jaxpm.painting import cic_paint, cic_read
+from jaxpm.pm import lpt
+from jaxpm.kernels import fftk, gradient_kernel, laplace_kernel, longrange_kernel
+from jaxpm.nn import NeuralSplineFourierFilter
 
 __all__ = [
     'get_density_planes',
 ]
+
+model = hk.without_apply_rng(hk.transform(lambda x,a : NeuralSplineFourierFilter(n_knots=16, latent_size=32)(x,a)))
 
 def linear_field(mesh_shape, box_size, pk):
     """
@@ -38,6 +46,7 @@ def get_density_planes(cosmology,
                    density_plane_smoothing=3.,     # In Mpc/h
                    box_size=[400.,400.,4000.],     # In Mpc/h
                    nc=[64,64,640],
+                   neural_spline_params=None
                    ):
   """Function that returns tomographic density planes 
   for a given cosmology from a lightcone.
@@ -49,6 +58,7 @@ def get_density_planes(cosmology,
     density_plane_smoothing: Gaussian scale of plane smoothing
     box_size: [sx,sy,sz] size in Mpc/h of the simulation volume
     nc: number of particles/voxels in the PM scheme
+    neural_spline_params: optional parameters for neural correction of PM scheme
   Returns:
     list of [r, a, plane], slices through the lightcone along with their
         comoving distance and scale factors.
@@ -74,10 +84,45 @@ def get_density_planes(cosmology,
   cosmology._workspace = {} # FIX ME: this a temporary fix
   dx, p, f = lpt(cosmology, initial_conditions, particles, 0.01)
 
+  @jax.jit
+  def neural_nbody_ode(state, a, cosmo, params):
+      """
+      state is a tuple (position, velocities)
+      """
+      pos, vel = state
+      
+      kvec = fftk(nc)
+
+      delta = cic_paint(jnp.zeros(nc), pos)
+      
+      delta_k = jnp.fft.rfftn(delta)
+      
+      # Computes gravitational potential
+      pot_k = delta_k * laplace_kernel(kvec) * longrange_kernel(kvec, r_split=0)
+      
+      # Apply a correction filter
+      if params is not None:
+        kk = jnp.sqrt(sum((ki/jnp.pi)**2 for ki in kvec))
+        pot_k = pot_k *(1. + model.apply(params, kk, jnp.atleast_1d(a)))
+      
+      # Computes gravitational forces
+      forces = jnp.stack([cic_read(jnp.fft.irfftn(gradient_kernel(kvec, i)*pot_k), pos) 
+                        for i in range(3)],axis=-1)
+      
+      forces = forces * 1.5 * cosmo.Omega_m
+
+      # Computes the update of position (drift)
+      dpos = 1. / (a**3 * jnp.sqrt(jc.background.Esqr(cosmo, a))) * vel
+      
+      # Computes the update of velocity (kick)
+      dvel = 1. / (a**2 * jnp.sqrt(jc.background.Esqr(cosmo, a))) * forces
+      
+      return dpos, dvel
+
   # Evolve the simulation forward
-  res = odeint(make_ode_fn(nc), [particles+dx, p], 
+  res = odeint(neural_nbody_ode, [particles+dx, p], 
                 jnp.concatenate([jnp.atleast_1d(0.01), a_center[::-1]]), 
-                cosmology, rtol=1e-5, atol=1e-5)
+                cosmology, neural_spline_params, rtol=1e-5, atol=1e-5)
 
   # Extract the lensplanes
   density_planes = []
