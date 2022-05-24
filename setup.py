@@ -4,7 +4,7 @@ from io import open
 
 # read the contents of the README file
 with open('README.md', encoding="utf-8") as f:
-    long_description = f.read()
+  long_description = f.read()
 
 setup(
     name='BPCosmo',
@@ -15,7 +15,9 @@ setup(
     url='https://github.com/LSSTDESC/bayesian-pipelines-cosmology',
     license='MIT',
     packages=find_packages(),
-    install_requires=['numpyro', 'jax', 'lenstools', 'dm-haiku', 'jaxpm', 'jax-cosmo'],
+    install_requires=[
+        'numpyro', 'jax', 'lenstools', 'dm-haiku', 'jaxpm', 'jax-cosmo'
+    ],
     dependency_links=[
         'https://github.com/DifferentiableUniverseInitiative/JaxPM/tarball/master#egg=jaxpm-0.0.1'
     ],
@@ -28,5 +30,4 @@ setup(
     ],
     keywords='cosmology',
     use_scm_version=True,
-    setup_requires=['setuptools_scm']
-)
+    setup_requires=['setuptools_scm'])
