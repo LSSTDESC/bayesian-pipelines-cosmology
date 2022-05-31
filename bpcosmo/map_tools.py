@@ -110,29 +110,24 @@ class MapTools:
 
   def set_fourier_plane_face(self, F_x, x):
     N = self.N_grid
-    F_x = jax.ops.index_update(F_x, jax.ops.index[:, :, 1:-1],
-                               x[:N**2 - 2 * N].reshape(2, N, N // 2 - 1))
+    F_x.at[:, :, 1:-1].set(x[:N**2 - 2 * N].reshape(2, N, N // 2 - 1))
     return F_x
 
   def set_fourier_plane_edge(self, F_x, x):
     N = self.N_grid
     N_Y = N // 2 + 1
     N_edge = N // 2 - 1
-    F_x = jax.ops.index_update(
-        F_x, jax.ops.index[:, 1:N_Y - 1, 0],
-        x[N**2 - 2 * N:N**2 - 2 * N + 2 * N_edge].reshape((2, -1)))
-    F_x = jax.ops.index_update(
-        F_x, jax.ops.index[:, 1:N_Y - 1, -1],
-        x[N**2 - 2 * N + 2 * N_edge:-3].reshape((2, -1)))
+    F_x.at[:, 1:N_Y - 1, 0].set(x[N**2 - 2 * N:N**2 - 2 * N + 2 * N_edge].reshape((2, -1)))
+    F_x.at[:, 1:N_Y - 1, -1].set(x[N**2 - 2 * N + 2 * N_edge:-3].reshape((2, -1)))
     return F_x
 
   def set_fourier_plane_corner(self, F_x, x):
     N = self.N_grid
     N_Y = N // 2 + 1
 
-    F_x = jax.ops.index_update(F_x, jax.ops.index[0, N_Y - 1, -1], x[-3])
-    F_x = jax.ops.index_update(F_x, jax.ops.index[0, 0, -1], x[-2])
-    F_x = jax.ops.index_update(F_x, jax.ops.index[0, N_Y - 1, 0], x[-1])
+    F_x.at[0, N_Y - 1, -1].set(x[-3])
+    F_x.at[0, 0, -1].set(x[-2])
+    F_x.at[0, N_Y - 1, 0].set(x[-1])
     return F_x
 
   @partial(jit, static_argnums=(0, ))
