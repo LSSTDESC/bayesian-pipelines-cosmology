@@ -66,8 +66,12 @@ def get_density_planes(
     neural_spline_params: optional parameters for neural correction of PM scheme
   Returns:
     list of [r, a, plane], slices through the lightcone along with their
-        comoving distance and scale factors.
+        comoving distance (r) and scale factors (a). Each slice "plane" is a
+        2d array of size density_plane_npix^2
   """
+  # Initial scale factor for the simulation
+  a_init = 0.01
+
   # Planning out the scale factor stepping to extract desired lensplanes
   n_lens = int(box_size[-1] // density_plane_width)
   r = jnp.linspace(0., box_size[-1], n_lens + 1)
@@ -75,7 +79,7 @@ def get_density_planes(
   a_center = jc.background.a_of_chi(cosmology, r_center)
 
   # Create a small function to generate the matter power spectrum
-  k = jnp.logspace(-4, 1, 128)
+  k = jnp.logspace(-4, 1, 256)
   pk = jc.power.linear_matter_power(cosmology, k)
   pk_fn = lambda x: jc.scipy.interpolate.interp(x.reshape([-1]), k, pk
                                                 ).reshape(x.shape)
@@ -89,12 +93,13 @@ def get_density_planes(
 
   # Initial displacement
   cosmology._workspace = {}  # FIX ME: this a temporary fix
-  dx, p, f = lpt(cosmology, initial_conditions, particles, 0.01)
+  dx, p, f = lpt(cosmology, initial_conditions, particles, a=a_init)
 
   @jax.jit
   def neural_nbody_ode(state, a, cosmo, params):
     """
-      state is a tuple (position, velocities)
+      state is a tuple (position, velocities ) in internal units: [grid units, v=\frac{a^2}{H_0}\dot{x}]
+      See this link for conversion rules: https://github.com/fastpm/fastpm#units
       """
     pos, vel = state
 
@@ -131,7 +136,7 @@ def get_density_planes(
 
   # Evolve the simulation forward
   res = odeint(neural_nbody_ode, [particles + dx, p],
-               jnp.concatenate([jnp.atleast_1d(0.01), a_center[::-1]]),
+               jnp.concatenate([jnp.atleast_1d(a_init), a_center[::-1]]),
                cosmology,
                neural_spline_params,
                rtol=1e-5,
@@ -139,7 +144,7 @@ def get_density_planes(
 
   # Extract the lensplanes
   density_planes = []
-  for i in range(len(a_center)):
+  for i in range(n_lens):
     dx = box_size[0] / density_plane_npix
     dz = density_plane_width
     plane = density_plane(res[0][::-1][i],
